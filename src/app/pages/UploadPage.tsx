@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router";
-import { Upload, File, X, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, File, X, CheckCircle2, AlertCircle, ChevronRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
 import { Button } from "../components/ui/button";
 import { Label } from "../components/ui/label";
@@ -13,6 +13,8 @@ import {
   SelectValue,
 } from "../components/ui/select";
 import { Progress } from "../components/ui/progress";
+import { ExtractedFieldsTable } from "../components/ExtractedFieldsTable";
+import { mockFields } from "../../data/mockData";
 
 interface UploadedFile {
   id: string;
@@ -22,13 +24,17 @@ interface UploadedFile {
   error?: string;
 }
 
+type UploadStep = "customer" | "files" | "metadata" | "review";
+
 export function UploadPage() {
   const navigate = useNavigate();
+  const [currentStep, setCurrentStep] = useState<UploadStep>("customer");
   const [files, setFiles] = useState<UploadedFile[]>([]);
   const [dragActive, setDragActive] = useState(false);
   const [wasteType, setWasteType] = useState("");
   const [documentType, setDocumentType] = useState("");
   const [customer, setCustomer] = useState("");
+  const [notes, setNotes] = useState("");
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault();
@@ -66,7 +72,6 @@ export function UploadPage() {
 
     setFiles((prev) => [...prev, ...newFiles]);
 
-    // Simulate upload progress
     newFiles.forEach((uploadFile) => {
       simulateUpload(uploadFile.id);
     });
@@ -96,19 +101,62 @@ export function UploadPage() {
     setFiles((prev) => prev.filter((f) => f.id !== fileId));
   };
 
-  const handleSubmit = () => {
-    // In a real app, this would trigger actual processing
-    const completedFiles = files.filter((f) => f.status === "complete");
-    if (completedFiles.length > 0) {
-      // Navigate directly to review workbench, skipping processing screen for Phase 1
-      navigate("/review/doc-003");
+  const handleNextStep = () => {
+    if (currentStep === "customer" && customer) {
+      setCurrentStep("files");
+    } else if (currentStep === "files" && files.length > 0 && files.every((f) => f.status === "complete")) {
+      setCurrentStep("metadata");
+    } else if (currentStep === "metadata" && wasteType && documentType) {
+      setCurrentStep("review");
     }
+  };
+
+  const handlePrevStep = () => {
+    if (currentStep === "files") {
+      setCurrentStep("customer");
+    } else if (currentStep === "metadata") {
+      setCurrentStep("files");
+    } else if (currentStep === "review") {
+      setCurrentStep("metadata");
+    }
+  };
+
+  const handleSubmit = () => {
+    navigate("/submission-success", {
+      state: {
+        customer,
+        fileCount: files.length,
+        documentType,
+        wasteType,
+      },
+    });
   };
 
   const allFilesComplete = files.length > 0 && files.every((f) => f.status === "complete");
 
+  const stepIndicator = (
+    <div className="flex items-center gap-2 mb-6">
+      {(['customer', 'files', 'metadata', 'review'] as const).map((step, index) => (
+        <div key={step} className="flex items-center gap-2">
+          <div
+            className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium transition-colors ${
+              currentStep === step
+                ? 'bg-[#111111] text-white'
+                : ['customer', 'files', 'metadata'].includes(currentStep) && ['customer', 'files', 'metadata', 'review'].indexOf(step) < ['customer', 'files', 'metadata', 'review'].indexOf(currentStep)
+                ? 'bg-green-500 text-white'
+                : 'bg-slate-200 text-slate-600'
+            }`}
+          >
+            {index + 1}
+          </div>
+          {index < 3 && <div className="h-0.5 w-8 bg-slate-200" />}
+        </div>
+      ))}
+    </div>
+  );
+
   return (
-    <div className="p-6 max-w-5xl mx-auto space-y-6">
+    <div className="p-6 max-w-4xl mx-auto space-y-6">
       {/* Header */}
       <div>
         <h1 className="text-2xl font-semibold text-slate-900">Upload Documents</h1>
@@ -117,11 +165,56 @@ export function UploadPage() {
         </p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Upload Area */}
-        <Card className="lg:col-span-2">
+      {stepIndicator}
+
+      {/* Step 1: Customer Selection */}
+      {currentStep === "customer" && (
+        <Card>
           <CardHeader>
-            <CardTitle>Document Upload</CardTitle>
+            <CardTitle>Select Customer</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div>
+              <Label htmlFor="customer">Customer Name</Label>
+              <Select value={customer} onValueChange={setCustomer}>
+                <SelectTrigger id="customer" className="mt-2">
+                  <SelectValue placeholder="Select a customer" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="acme">Acme Manufacturing Inc.</SelectItem>
+                  <SelectItem value="techcorp">TechCorp Solutions</SelectItem>
+                  <SelectItem value="global">Global Logistics Ltd</SelectItem>
+                  <SelectItem value="enterprise">Enterprise Systems Corp</SelectItem>
+                  <SelectItem value="buildright">BuildRight Construction</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="pt-4 flex gap-3">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => navigate("/")}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleNextStep}
+                disabled={!customer}
+                className="w-full bg-[#111111] hover:bg-black flex items-center justify-center gap-2"
+              >
+                Next <ChevronRight size={18} />
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Step 2: File Upload */}
+      {currentStep === "files" && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload Files for {customer === "acme" ? "Acme Manufacturing Inc." : customer === "techcorp" ? "TechCorp Solutions" : customer === "global" ? "Global Logistics Ltd" : customer === "enterprise" ? "Enterprise Systems Corp" : "BuildRight Construction"}</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
             {/* Drag & Drop Zone */}
@@ -166,7 +259,7 @@ export function UploadPage() {
             {/* Uploaded Files List */}
             {files.length > 0 && (
               <div className="space-y-3">
-                <h3 className="font-medium text-slate-900">Uploaded Files</h3>
+                <h3 className="font-medium text-slate-900">{files.length} File(s) Selected</h3>
                 {files.map((uploadFile) => (
                   <div
                     key={uploadFile.id}
@@ -211,10 +304,29 @@ export function UploadPage() {
                 ))}
               </div>
             )}
+
+            <div className="pt-4 flex gap-3">
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={handlePrevStep}
+              >
+                Back
+              </Button>
+              <Button
+                onClick={handleNextStep}
+                disabled={!allFilesComplete}
+                className="w-full bg-[#111111] hover:bg-black flex items-center justify-center gap-2"
+              >
+                Next <ChevronRight size={18} />
+              </Button>
+            </div>
           </CardContent>
         </Card>
+      )}
 
-        {/* Metadata Form */}
+      {/* Step 3: Metadata */}
+      {currentStep === "metadata" && (
         <Card>
           <CardHeader>
             <CardTitle>Document Information</CardTitle>
@@ -249,49 +361,89 @@ export function UploadPage() {
             </div>
 
             <div>
-              <Label htmlFor="customer">Customer</Label>
-              <Select value={customer} onValueChange={setCustomer}>
-                <SelectTrigger id="customer" className="mt-1.5">
-                  <SelectValue placeholder="Select customer" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="acme">Acme Manufacturing Inc.</SelectItem>
-                  <SelectItem value="techcorp">TechCorp Solutions</SelectItem>
-                  <SelectItem value="global">Global Logistics Ltd</SelectItem>
-                  <SelectItem value="enterprise">Enterprise Systems Corp</SelectItem>
-                  <SelectItem value="buildright">BuildRight Construction</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
               <Label htmlFor="notes">Notes (Optional)</Label>
               <Input
                 id="notes"
                 placeholder="Add any relevant notes..."
                 className="mt-1.5"
+                value={notes}
+                onChange={(e) => setNotes(e.target.value)}
               />
             </div>
 
-            <div className="pt-4 space-y-3">
-              <Button
-                onClick={handleSubmit}
-                disabled={!allFilesComplete || !wasteType || !documentType || !customer}
-                className="w-full bg-[#111111] hover:bg-black"
-              >
-                Start Extraction
-              </Button>
+            <div className="pt-4 flex gap-3">
               <Button
                 variant="outline"
                 className="w-full"
-                onClick={() => navigate("/")}
+                onClick={handlePrevStep}
               >
-                Cancel
+                Back
+              </Button>
+              <Button
+                onClick={handleNextStep}
+                disabled={!wasteType || !documentType}
+                className="w-full bg-[#111111] hover:bg-black flex items-center justify-center gap-2"
+              >
+                Review <ChevronRight size={18} />
               </Button>
             </div>
           </CardContent>
         </Card>
-      </div>
+      )}
+
+      {/* Step 4: Review Extracted Fields */}
+      {currentStep === "review" && (
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Submission Summary</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <p className="text-sm text-slate-600">Customer</p>
+                  <p className="font-medium text-slate-900">
+                    {customer === "acme" ? "Acme Manufacturing Inc." : customer === "techcorp" ? "TechCorp Solutions" : customer === "global" ? "Global Logistics Ltd" : customer === "enterprise" ? "Enterprise Systems Corp" : "BuildRight Construction"}
+                  </p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Files</p>
+                  <p className="font-medium text-slate-900">{files.length} file(s)</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Waste Type</p>
+                  <p className="font-medium text-slate-900 capitalize">{wasteType}</p>
+                </div>
+                <div>
+                  <p className="text-sm text-slate-600">Document Type</p>
+                  <p className="font-medium text-slate-900">{documentType === "sds" ? "Safety Data Sheet (SDS)" : "Lab Analysis Report"}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <div>
+            <h2 className="text-lg font-semibold text-slate-900 mb-4">Extracted Fields Preview</h2>
+            <ExtractedFieldsTable fields={mockFields} />
+          </div>
+
+          <div className="flex gap-3">
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={handlePrevStep}
+            >
+              Back
+            </Button>
+            <Button
+              onClick={handleSubmit}
+              className="w-full bg-[#111111] hover:bg-black"
+            >
+              Submit & Complete
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

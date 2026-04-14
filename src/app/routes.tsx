@@ -9,6 +9,7 @@ import { ReviewWorkbenchPage } from "./pages/ReviewWorkbenchPage";
 import { HistoryPage } from "./pages/HistoryPage";
 import { AdminPage } from "./pages/AdminPage";
 import { AnalyticsPage } from "./pages/AnalyticsPage";
+import { SubmissionSuccessPage } from "./pages/SubmissionSuccessPage";
 import { NotFoundPage } from "./pages/NotFoundPage";
 
 export const router = createBrowserRouter([
@@ -29,6 +30,10 @@ export const router = createBrowserRouter([
       { path: "admin", Component: AdminPage },
       { path: "analytics", Component: AnalyticsPage },
     ],
+  },
+  {
+    path: "/submission-success",
+    Component: SubmissionSuccessPage,
   },
   {
     path: "*",
